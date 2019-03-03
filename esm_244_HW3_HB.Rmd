@@ -1,0 +1,73 @@
+---
+title: "ESM 244 Homework 3"
+author: "Hanna Buechi"
+date: "3/3/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages_data, warning=FALSE, message=FALSE, results='hide'}
+
+library(tidyverse)
+library(tseries)
+library(forecast)
+
+truckee <- read_csv("truckee_flow.csv")
+lizard <- read_csv("lter_lizard_pitfall.csv")
+
+## Truckee River data
+
+# mean_va -> mean monthly discharge in cubic feet per second
+# year and month are self-explanatory
+
+## Lizard data
+
+# Zone: vegetation zone (C=creosote bush, G=grassland, M=mesquite, P=playa, T=tarbush)
+# Site: Site location (CALI GRAV SAND; BASN IBPE SUMM; RABB NORT WELL; COLL SMAL TOBO; EAST TAYL WEST)
+# Plot: Plot A, B, C, D
+# Pit: Pit number (1 -16)
+# Spp: Species code (CNTI, UTST, CNTE, CNIN, SCUN, HOMA, EUOB) # check more of these
+# Sex: M (male), F (female), J (juvenile)
+# Rcap: Recaptured  (N=new capture, R = recapture)
+# Toenum: Toe mark number (includes Tail Mark beginning 3/16/95)
+# SV-L: Snout-vent length in mm
+# Total-length: Total length in mm
+# Weight: Body weight in grams
+# Tail: Tail condition (B = broken, W = whole)
+# PC: Problem code (1 = see history log; 0 = no problem)
+
+```
+
+###Task 2: 
+
+####Part a: Decomposed time series graphs
+
+a. Create a graph with the decomposed time series information (original, trend, seasonal, and residual). You do not need to further finalize this graph. You do not need to add a figure caption.
+
+In text below the decomposed graphs, generally describe the time series data in 2 - 3 sentences. For example, does it appear additive or multiplicative? Stationary or non-stationary? Are there outliers? Is there seasonality? Does there appear to be a cyclical trend beyond the normal seasonality? Etc.
+
+```{r time_graphs, warning=FALSE, message=FALSE}
+
+# I did some data clean up in Excel because it was quick and easy
+
+# create a vector of time series-specific data # the original df doesn't work with tseries()
+
+mean_ts <- ts(truckee$mean_va, frequency = 12, start = c(2000,1)) # frequency = 12 indicates that this is monthly data that starts in 2000
+
+# mean_ts # look at it to confirm that everything worked - yes, it ends in September 2016
+
+# plot(mean_ts) # plot to explore the trend, seasonality, cycle
+
+# a little bit of a downward trend
+# seasonality: the annual, intermediate peaks
+# cyclical: the big peaks are repeated twice
+
+mean_dc <- decompose(mean_ts) # does Steps 1-4 of decomposition (Detect trend, de-trend by subtraction, calculate average seasonal component (ASC), "random/remainder" is cycle)
+
+plot(mean_dc) # original, trend, seasonality, residuals that show trends that don't depend on the other decompositions
+
+```
+
