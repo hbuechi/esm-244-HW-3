@@ -21,6 +21,14 @@ library(car)
 library(effsize)
 library(pwr)
 library(plyr)
+library(sf)
+library(tmap)
+library(leaflet)
+library(ggrepel)
+library(ggspatial)
+library(RColorBrewer)
+library(raster)
+library(ggrepel)
 
 truckee <- read_csv("truckee_flow.csv")
 lizard <- read_csv("lter_lizard_pitfall.csv")
@@ -51,11 +59,6 @@ lizard <- read_csv("lter_lizard_pitfall.csv")
 ###Task 2: 
 
 ####Part a: Decomposed time series graphs
-
-a. Create a graph with the decomposed time series information (original, trend, seasonal, and residual). You do not need to further finalize this graph. You do not need to add a figure caption.
-
-In text below the decomposed graphs, generally describe the time series data in 2 - 3 sentences. For example, does it appear additive or multiplicative? Stationary or non-stationary? Are there outliers? Is there seasonality? Does there appear to be a cyclical trend beyond the normal seasonality? Etc.
-
 ```{r time_graphs, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
 # I did some data clean up in Excel because it was quick and easy
@@ -87,7 +90,6 @@ plot(mean_dc) # original, trend, seasonality, residuals that show trends that do
 The monthly mean discharge of the Truckee River is additive (the peaks have roughly the same frequency and amplitude) and there is an overall downward trend between 2000 and 201. There are also strong seasonal (by year) and cyclical components; I'm comparing the scales of each graph to make that claim. The cyclical decomposition shows a lot of variability in ~2006/2007 and ~2012, both of which were wet periods in two decades characterized by drought. (Reference: https://www.drought.gov/drought/states/california)
 
 ####Part b: Holt-Winters or ARIMA for forecasting
-
 ```{r about_the_tests, warning=FALSE, message=FALSE, errors=FALSE, include = FALSE, results='hide'}
 
 #Holt-Winters: triple exponential smoothing (alpha, beta, gamma), uses smoothing factors to weight more recent time points more in prediction, based on trend and seasonality
@@ -102,8 +104,8 @@ The monthly mean discharge of the Truckee River is additive (the peaks have roug
 
 # two ways to visualize ACF
 
-mean_acf <- acf(mean_ts) # acf = autocorrelation function
-mean_ggacf <- ggtsdisplay(mean_ts) # displays original data and ACF, which is nice
+# mean_acf <- acf(mean_ts) # acf = autocorrelation function
+# mean_ggacf <- ggtsdisplay(mean_ts) # displays original data and ACF, which is nice
 
 # peaks every 12 months; those peaks and two months on eiter side are correlated to x-sub-0, as are the two months directly after x-sub-0; there are troughs every 6 months, those are also correlated to x-sub-0, the trough 28 months away is the most correlated of the troughs
 
@@ -112,15 +114,12 @@ mean_ggacf <- ggtsdisplay(mean_ts) # displays original data and ACF, which is ni
 Holt-Winters exponential smoothing coefficients:
 ```{r holt_winters, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
-# CODE NO RESULTS
-
 mean_hw <- HoltWinters(mean_ts)
-mean_hw
 
 # alpha = 0.2418713, beta = 0, gamma = 0.3384547
 # coefficients will be used in linear combinations for forecasting
 
-plot(mean_hw) # looks pretty good with original data
+# mean_plot <- plot(mean_hw) # looks pretty good with original data
 
 ```
 
@@ -128,12 +127,11 @@ Holt-Winters forecasting, 5 years into the future:
 ```{r HW_forecasting, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
 mean_forecast <- forecast(mean_hw, h = 60) # 60 months = 5 years into the future - remember, we defined this as monthly data using the tserie() package
-plot(mean_forecast)
+# forecast_plot <- plot(mean_forecast)
 
 # SEASONALITY is dominating, we don't get much input from the past cyclical peaks, probably because HW weight recent observations
-# dark grey ribbons 80% CI, light grey 95% CI
 
-# do I need axes labels if I'm not supposed to use ggplot?
+# dark grey ribbons 80% CI, light grey 95% CI
 
 ```
 
@@ -142,11 +140,13 @@ plot(mean_forecast)
 
 par(mfrow = c(1,2))
 hist(mean_forecast$residuals)
-qqnorm(mean_forecast$residuals) # NICE
+qqnorm(mean_forecast$residuals)
+
+# Residuals look normally distributed
 
 ```
 
-####Extra: ARMIA for comparison
+####Extra: ARIMA for comparison
 ```{r ARIMA, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
 mean_pdq <- auto.arima(mean_ts)
@@ -159,12 +159,11 @@ mean_pdq
 mean_arima <- arima(mean_ts, order = c(2,1,1), seasonal = list(order = c(0,0,2)))
 mean_arima
 
-# Check out the residuals
+# Check out the residuals: they look normally distributed
 
-par(mfrow = c(1,2))
-hist(mean_arima$residuals)
-qqnorm(mean_arima$residuals) # NICE
-
+# par(mfrow = c(1,2))
+# hist(mean_arima$residuals)
+# qqnorm(mean_arima$residuals)
 ```
 
 ```{r ARIMA_forecast, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
@@ -172,16 +171,75 @@ qqnorm(mean_arima$residuals) # NICE
 # forecast
 
 forecast_mean <- forecast(mean_arima, h = 60) # 60 time periods / months = 5 years
-plot(forecast_mean) # oh no
+plot(forecast_mean)
+
+# This doesn't look good...
 
 ```
 
+###Task 3: Mapping California's National Parks
+```{r wrangle_spatial_data, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
+
+# Remember: .shp - geometries, .dbf - attributes, .prj - projections --> if there is no projection associated, we'll have to set one
+
+ca_counties <- read_sf(".", layer = "california_county_shape_file") # "." indicates current working directory
+st_crs(ca_counties) = 4326 # transform projection system to WGS84
+parks <- read_sf(".", layer = "nps_boundary" ) # I imagine I'll have to clip this to California
+st_crs(parks) = 4326 # st_crs(parks) to confirm
+
+# Clip National Parks data by California Counties data
+parks_clip <- st_intersection(parks, ca_counties) %>%
+  filter(UNIT_TYPE == "National Park") %>% 
+  dplyr::rename(Park = UNIT_NAME)
+
+parks_clip <- parks_clip %>% 
+  mutate(PARKNAME = ifelse(is.na(parks_clip$PARKNAME), "Redwood", parks_clip$PARKNAME))
+
+```
+
+```{r map, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
+
+# counties to be background, parks to be foreground: code for ecoregions (analogous to parks_clip) and dams from Lab 6 will be helpful
+
+parks_coords <- parks_clip %>% 
+  st_centroid %>% # find polygon centroids (sf points object)
+  st_coordinates # extract the coordinates of these points as a matrix
+
+# insert centroid long and lat fields as attributes of polygons
+parks_clip$long <- parks_coords[,1] # base R syntax for first column, which is X aka. longitude
+parks_clip$lat <- parks_coords[,2]
+
+# separate df for labeling, only the one entry for each park - do this manually, unfortunately
+parks_label <- parks_clip %>% 
+  slice(c(2,3,8,11,17,14,15,22,23))
+
+ggplot(parks_clip) +
+  geom_sf(data = ca_counties, # add the county borders
+          fill = "papayawhip",
+          color = "gray 30",
+          size = 0.05)+
+  geom_sf(fill = "springgreen4",
+          color = "NA", # no borders around the polygons
+          show.legend = FALSE) + # gets rid of legend
+  ggtitle("California's National Parks") +
+  coord_sf(datum = NA) +
+  geom_label_repel(data=parks_label,
+                  aes(long, lat, label = PARKNAME), 
+                  alpha = 0.75, size = 2, 
+                  fontface = "bold",
+                  min.segment.length = unit(0, 'lines'),
+                  nudge_x = 0.5, 
+                  nudge_y = 0.5) +
+  labs(x = " ", y = " ") +
+  theme_minimal()
+
+
+```
+
+
+
+
 ###Task 4: Lizards in the Northern Chihuahan Desert - Data Wrangling and Analysis
-
-1. For all lizards trapped at site ‘CALI’, do weights of male and female adult lizards differ significantly?
-
-2. For lizards trapped at the ‘CALI’ site, is there a significant difference in the proportion of adult male and female lizards with broken tails?
-
 ```{r panel_regression_INCORRECT, eval=FALSE}
 
 weight <- lizard %>% 
@@ -231,63 +289,72 @@ weight_panel <- weight_panel %>%
 
 ```
 
-####T-test to test if average weight of males lizards is different from female lizards
+####Part 1. For all lizards trapped at site ‘CALI’, do weights of male and female adult lizards differ significantly?
+
+#####Mann-Whitney U Test (distributions aren't normal)
 ```{r ttest, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
-# lab 4 from 206
+# Lab 4 from ESM 206 for reference
 
+## Data wrangling: separate df for sexes, make sure there aren't "." for weight, filter out recaptured animals so that they aren't counted twice (I'm hoping that toe_num isn't a unique identifier and that the dates are relevant...)
 male <- lizard %>%
   filter(site == "CALI" | sex == "M") %>%
   filter(weight > 0) %>% 
-  select(weight, rcap, tail) %>% 
+  dplyr::select(weight, rcap, tail) %>% 
   filter(rcap != "R")
-
 
 female <- lizard %>% 
   filter(site == "CALI", sex == "F") %>%
   filter(weight > 0) %>% 
-  select(weight, rcap, tail) %>% 
+  dplyr::select(weight, rcap, tail) %>% 
   filter(rcap != "R")
-
-# I filtered out recaptured lizards, there doesn't seem to be a ton in either group. I am hoping that toe number isn't a unique identifier.
 
 male$weight <- as.numeric(male$weight)
 female$weight <- as.numeric(female$weight)
 
+## Vector of weights
 m <- male$weight
 f <- female$weight
 
+## Check sample sizes: they are very different!!
 length(m) # 840
 length(f) # 61
 
-par(mfrow = c(2, 2)) # two columns, two rows
-hist(m)
-qqnorm(m)
-hist(f)
-qqnorm(f)
+## Check for normality: neither histograms indicate normality (makes sense, can't have weights below 0) and Q-Q plots don't follow a 45-deg line --> non-parametric test
+# par(mfrow = c(2, 2)) # two columns, two rows
+# hist(m)
+# qqnorm(m)
+# hist(f)
+# qqnorm(f)
 
-shapiro.test(m)
-shapiro.test(f)
-
+## Test for equal variances: Null hypothesis is that variances are equal --> yes, p = 0.28
 f_test <- var.test(m, f)
 f_test
 
-t_test_diff <- t.test(m, f, var.equal = TRUE)
-t_test_diff
+MWU <- wilcox.test(m,f)
+MWU
+
+## Parametric t-test: same conclustion to non-parametric test
+# t_test_diff <- t.test(m, f, var.equal = TRUE)
+# t_test_diff
 
 ```
 
-There is no significant difference in mean weight for male (n=840) and female (n=61) lizards captured at the "CALI" site between 1989 and 2006 (t(899) = -0.70, p = 0.48, alpha = 0.05).
+There is no significant difference in mean weight for male (n=840) and female (n=61) lizards captured at the "CALI" site between 1989 and 2006 (f(839) = 0.83, p = 0.28, alpha = 0.05).
 
-####Chi-square test
-```{r contingency_table}
+####Part 2. For lizards trapped at the ‘CALI’ site, is there a significant difference in the proportion of adult male and female lizards with broken tails?
+
+#####Chi-square test
+```{r contingency_table, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
+
+# Lab 6 from ESM 206 for reference
 
 male_tail <- male %>%
-  select(tail) %>%
+  dplyr::select(tail) %>%
   filter(tail == "B" | tail == "W")
 
 female_tail <- female %>%
-  select(tail) %>%
+  dplyr::select(tail) %>%
   filter(tail == "B" | tail == "W")
 
 # How many of each sex have whole or broken tails?
@@ -295,11 +362,19 @@ female_tail <- female %>%
 as.data.frame(table(female_tail$tail))
 as.data.frame(table(male_tail$tail))
 
-ff <- c("48","13")
-mm <- c("638","198")
+ff <- c(48,13)
+mm <- c(638,198)
 
 tail_status <- rbind(ff, mm)
 colnames(tail_status) <- c("Whole", "Broken")
 
+tail_prop_table <- prop.table(tail_status, margin = 1) # calculate probabilities by row
+
+# Null hypothesis: proportions of broken vs. whole tail are the same within each sex
+
+tail_chi <- chisq.test(tail_status)
+tail_chi
+
 ```
 
+There is no significant difference in the proportion of males and females with broken tails  that were captured at the "CALI" sampling site ($\chi$^2(1) = 0.070, p = 0.79, $\alpha$ = 0.05). For both sexes, about 75% had whole, unbroken tails.
