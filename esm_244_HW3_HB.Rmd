@@ -9,11 +9,18 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r packages_data, warning=FALSE, message=FALSE, results='hide'}
+```{r packages_data, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
 library(tidyverse)
 library(tseries)
 library(forecast)
+library(plm)
+library(Ecdat)
+library(lmtest)
+library(car)
+library(effsize)
+library(pwr)
+library(plyr)
 
 truckee <- read_csv("truckee_flow.csv")
 lizard <- read_csv("lter_lizard_pitfall.csv")
@@ -49,7 +56,7 @@ a. Create a graph with the decomposed time series information (original, trend, 
 
 In text below the decomposed graphs, generally describe the time series data in 2 - 3 sentences. For example, does it appear additive or multiplicative? Stationary or non-stationary? Are there outliers? Is there seasonality? Does there appear to be a cyclical trend beyond the normal seasonality? Etc.
 
-```{r time_graphs, warning=FALSE, message=FALSE}
+```{r time_graphs, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
 # I did some data clean up in Excel because it was quick and easy
 
@@ -68,6 +75,231 @@ mean_ts <- ts(truckee$mean_va, frequency = 12, start = c(2000,1)) # frequency = 
 mean_dc <- decompose(mean_ts) # does Steps 1-4 of decomposition (Detect trend, de-trend by subtraction, calculate average seasonal component (ASC), "random/remainder" is cycle)
 
 plot(mean_dc) # original, trend, seasonality, residuals that show trends that don't depend on the other decompositions
+
+# flat lines for seasonality and cycle would indicate no contribution to time series variation/pattern
+# I'm interested in those peaks in 2006/2007 and 2012 - where does the variation come from?
+# They are still seen in trend, not seen in seasonality, still seen in cycle -> attribute to cycle
+# seasonality is strong (scale is 1/6 of scale of observed) and very regular
+# cycle peaks/troughs are very similar to observed data
+
+```
+
+The monthly mean discharge of the Truckee River is additive (the peaks have roughly the same frequency and amplitude) and there is an overall downward trend between 2000 and 201. There are also strong seasonal (by year) and cyclical components; I'm comparing the scales of each graph to make that claim. The cyclical decomposition shows a lot of variability in ~2006/2007 and ~2012, both of which were wet periods in two decades characterized by drought. (Reference: https://www.drought.gov/drought/states/california)
+
+####Part b: Holt-Winters or ARIMA for forecasting
+
+```{r about_the_tests, warning=FALSE, message=FALSE, errors=FALSE, include = FALSE, results='hide'}
+
+#Holt-Winters: triple exponential smoothing (alpha, beta, gamma), uses smoothing factors to weight more recent time points more in prediction, based on trend and seasonality
+
+# Autoregressive Integrated Moving Average (ARIMA): needs at least 40 historic observations, all time points are weighted equally, works with or without seasonality
+
+# There is seasonality in the Truckee River time series data, so either should work.
+
+```
+
+```{r ACF, warning=FALSE, message=FALSE, errors=FALSE, include = FALSE, results='hide'}
+
+# two ways to visualize ACF
+
+mean_acf <- acf(mean_ts) # acf = autocorrelation function
+mean_ggacf <- ggtsdisplay(mean_ts) # displays original data and ACF, which is nice
+
+# peaks every 12 months; those peaks and two months on eiter side are correlated to x-sub-0, as are the two months directly after x-sub-0; there are troughs every 6 months, those are also correlated to x-sub-0, the trough 28 months away is the most correlated of the troughs
+
+```
+
+Holt-Winters exponential smoothing coefficients:
+```{r holt_winters, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
+
+# CODE NO RESULTS
+
+mean_hw <- HoltWinters(mean_ts)
+mean_hw
+
+# alpha = 0.2418713, beta = 0, gamma = 0.3384547
+# coefficients will be used in linear combinations for forecasting
+
+plot(mean_hw) # looks pretty good with original data
+
+```
+
+Holt-Winters forecasting, 5 years into the future:
+```{r HW_forecasting, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
+
+mean_forecast <- forecast(mean_hw, h = 60) # 60 months = 5 years into the future - remember, we defined this as monthly data using the tserie() package
+plot(mean_forecast)
+
+# SEASONALITY is dominating, we don't get much input from the past cyclical peaks, probably because HW weight recent observations
+# dark grey ribbons 80% CI, light grey 95% CI
+
+# do I need axes labels if I'm not supposed to use ggplot?
+
+```
+
+####Part c: Check Holt-Winters residuals:
+```{r HW_residuals, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
+
+par(mfrow = c(1,2))
+hist(mean_forecast$residuals)
+qqnorm(mean_forecast$residuals) # NICE
+
+```
+
+####Extra: ARMIA for comparison
+```{r ARIMA, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
+
+mean_pdq <- auto.arima(mean_ts)
+mean_pdq
+
+# p,d,q non-seasonal: (2,1,1); seasonal (0,0,2)
+
+# fit the model
+
+mean_arima <- arima(mean_ts, order = c(2,1,1), seasonal = list(order = c(0,0,2)))
+mean_arima
+
+# Check out the residuals
+
+par(mfrow = c(1,2))
+hist(mean_arima$residuals)
+qqnorm(mean_arima$residuals) # NICE
+
+```
+
+```{r ARIMA_forecast, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
+
+# forecast
+
+forecast_mean <- forecast(mean_arima, h = 60) # 60 time periods / months = 5 years
+plot(forecast_mean) # oh no
+
+```
+
+###Task 4: Lizards in the Northern Chihuahan Desert - Data Wrangling and Analysis
+
+1. For all lizards trapped at site ‘CALI’, do weights of male and female adult lizards differ significantly?
+
+2. For lizards trapped at the ‘CALI’ site, is there a significant difference in the proportion of adult male and female lizards with broken tails?
+
+```{r panel_regression_INCORRECT, eval=FALSE}
+
+weight <- lizard %>% 
+  filter(site == "CALI") %>% 
+  filter(sex == "M" | sex == "F") %>% 
+  filter(weight > 0) %>%
+  filter(toe_num > 0)
+
+tail <- lizard %>%
+  filter(site == "CALI") %>% 
+  filter(sex == "M" | sex == "F") %>% 
+  filter(tail == "B" | tail == "W")
+
+# panel regression because some individuals are sampled multiple times - I know this based on toe number
+# however, this is not a balanced panel
+
+# other variables that might explain weight: total_length, SV_length, tail
+
+# data is our time variable
+
+# What is the effect of sex on lizard weight?
+
+weight_panel <- weight %>% 
+  select(date, sex, total_length, SV_length, tail, weight, toe_num)
+
+weight_panel$date <- as.Date(weight_panel$date, "%m/%d/%y")
+weight_panel$sex <- as.factor(weight_panel$sex)
+weight_panel$total_length <- as.numeric(weight_panel$total_length)
+weight_panel$SV_length <- as.numeric(weight_panel$SV_length)
+weight_panel$toe_num <- as.numeric(weight_panel$toe_num)
+weight_panel$tail <- as.factor(weight_panel$tail)
+
+# kept getting an error that there was a duplicate entry for date and toe number - it's toe number 4 - this could have been a data entry mistake, I think that one of those duplicates should have been a male lizard - interesting that toe-number can be repeated between Male and Female!
+
+# Index by sex too: now error because also toe_number 1: same date, same sex, same toe_number
+
+weight_panel <- weight_panel %>% 
+  filter(toe_num != 4) %>% 
+  filter(toe_num != 1)
+
+# weight_model <- plm(weight ~ sex + total_length + tail,
+                  #data = weight_panel,
+                  #index = c("date","toe_num", "sex"),
+                  #model = "within") # entity fixed effects model
+
+# this still isn't working, time to move on
+
+```
+
+####T-test to test if average weight of males lizards is different from female lizards
+```{r ttest, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
+
+# lab 4 from 206
+
+male <- lizard %>%
+  filter(site == "CALI" | sex == "M") %>%
+  filter(weight > 0) %>% 
+  select(weight, rcap, tail) %>% 
+  filter(rcap != "R")
+
+
+female <- lizard %>% 
+  filter(site == "CALI", sex == "F") %>%
+  filter(weight > 0) %>% 
+  select(weight, rcap, tail) %>% 
+  filter(rcap != "R")
+
+# I filtered out recaptured lizards, there doesn't seem to be a ton in either group. I am hoping that toe number isn't a unique identifier.
+
+male$weight <- as.numeric(male$weight)
+female$weight <- as.numeric(female$weight)
+
+m <- male$weight
+f <- female$weight
+
+length(m) # 840
+length(f) # 61
+
+par(mfrow = c(2, 2)) # two columns, two rows
+hist(m)
+qqnorm(m)
+hist(f)
+qqnorm(f)
+
+shapiro.test(m)
+shapiro.test(f)
+
+f_test <- var.test(m, f)
+f_test
+
+t_test_diff <- t.test(m, f, var.equal = TRUE)
+t_test_diff
+
+```
+
+There is no significant difference in mean weight for male (n=840) and female (n=61) lizards captured at the "CALI" site between 1989 and 2006 (t(899) = -0.70, p = 0.48, alpha = 0.05).
+
+####Chi-square test
+```{r contingency_table}
+
+male_tail <- male %>%
+  select(tail) %>%
+  filter(tail == "B" | tail == "W")
+
+female_tail <- female %>%
+  select(tail) %>%
+  filter(tail == "B" | tail == "W")
+
+# How many of each sex have whole or broken tails?
+
+as.data.frame(table(female_tail$tail))
+as.data.frame(table(male_tail$tail))
+
+ff <- c("48","13")
+mm <- c("638","198")
+
+tail_status <- rbind(ff, mm)
+colnames(tail_status) <- c("Whole", "Broken")
 
 ```
 
