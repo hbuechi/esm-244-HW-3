@@ -210,6 +210,8 @@ parks_clip$long <- parks_coords[,1] # base R syntax for first column, which is X
 parks_clip$lat <- parks_coords[,2]
 
 # separate df for labeling, only the one entry for each park - do this manually, unfortunately
+# Matt gave me an easier way: DON'T clip the nps_boundary to ca_counties because that makes the separate park/county polygons. Instead, keep them separate and filter nps_boundary by state (California) and map as a separate layer. Thanks, Matt! Example code saved in Github.
+
 parks_label <- parks_clip %>% 
   slice(c(2,3,8,11,17,14,15,22,23))
 
@@ -359,8 +361,10 @@ female_tail <- female %>%
 
 # How many of each sex have whole or broken tails?
 
-as.data.frame(table(female_tail$tail))
-as.data.frame(table(male_tail$tail))
+as.data.frame(table(female_tail$tail)) # 48, 13
+as.data.frame(table(male_tail$tail)) # 638, 198
+
+# Make a contingency table
 
 ff <- c(48,13)
 mm <- c(638,198)

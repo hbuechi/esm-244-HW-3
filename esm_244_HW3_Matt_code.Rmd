@@ -1,0 +1,76 @@
+---
+title: "esm_244_HW3_MW_mapping_code"
+author: "Hanna Buechi"
+date: "March 4, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(sf)
+library(tmap)
+library(leaflet)
+library(ggplot2)
+library(sp)
+library(ggrepel)
+library(ggspatial)
+library(RColorBrewer)
+library(raster)
+
+ca_counties <- read_sf(".", layer = "california_county_shape_file")
+st_crs(ca_counties) = 4326
+plot(ca_counties)
+
+View(ca_counties)
+
+ca_parks <- read_sf(".", layer = "nps_boundary") %>% 
+  dplyr::filter(STATE == "CA") %>% 
+  dplyr::filter(UNIT_TYPE == "National Park") %>% 
+  mutate(lon=map_dbl(geometry, ~st_centroid(.x)[[1]]),
+         lat=map_dbl(geometry, ~st_centroid(.x)[[2]]))
+
+st_crs(ca_parks) = 4326
+
+View(ca_parks)
+  
+plot(ca_parks)
+
+np_coords <- do.call(rbind, st_geometry(ca_parks)) %>% 
+    as_tibble() %>% setNames(c("lon","lat"))
+
+View(np_coords)
+
+ca_geom <- st_geometry(ca_parks$geometry)
+View(ca_geom)
+
+color_count <- 9
+mycolors <- colorRampPalette(brewer.pal(10, "Dark2"))(color_count)
+
+ggplot(ca_counties)+
+  geom_sf(fill = "azure1",
+          color = "gray30",
+          size = 0.1) +
+  geom_sf(data = ca_parks, 
+          aes(fill = UNIT_NAME),
+          color = "NA",
+          show.legend = FALSE)+
+  geom_label_repel(data = ca_parks, aes(x=lon, y = lat, label = UNIT_NAME),
+                   box.padding = 1,
+                   #force = 1,
+                  point.padding = 0.75,
+                  alpha = 0.75,
+                  fontface = 'bold', 
+                  color = 'black')+
+  scale_fill_manual(values = mycolors) +
+  theme(panel.grid.major = element_line(color = "transparent"), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_blank())+
+  ggtitle("California National Parks")
+
+```
+
