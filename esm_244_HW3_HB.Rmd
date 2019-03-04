@@ -239,8 +239,6 @@ ggplot(parks_clip) +
 ```
 
 
-
-
 ###Task 4: Lizards in the Northern Chihuahan Desert - Data Wrangling and Analysis
 ```{r panel_regression_INCORRECT, eval=FALSE}
 
