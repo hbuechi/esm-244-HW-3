@@ -53,10 +53,10 @@ This data includes point location of dams and attributes associated with them: o
 ####Read in data
 ```{r eco_regions}
 
-ca_eco <- read_sf(".", layer = "ca_eco") %>% # "." means get this from the current working directory
-  dplyr::select(US_L3NAME) %>% # if we view ca_eco, we see those column titles - this is just one of the columns for all of the attributes; sticky geometries!!!
-  rename(Region = US_L3NAME) %>% 
-  st_simplify(dTolerance = 100) %>% # larger tolerance --> lower spatial resolution to collapse more points onto single line; 100 m; makes running code faster, but should only be done at an appropriate scale
+ca_eco <- read_sf(".", layer = "ca_eco") %>%  # "." means get this from the current working directory
+  dplyr::select(US_L3NAME) %>%  # if we view ca_eco, we see those column titles - this is just one of the columns for all of the attributes; sticky geometries!!!
+  dplyr::rename(Region = US_L3NAME) %>% 
+  st_simplify(dTolerance = 100) %>%  # larger tolerance --> lower spatial resolution to collapse more points onto single line; 100 m; makes running code faster, but should only be done at an appropriate scale
   st_transform(crs = 4326) # transform existing projection system (st_crs() if there was no coordinate system); 4326 = WGS?
 
 st_crs(ca_eco) # check projection system
@@ -74,7 +74,7 @@ st_crs(ca_counties) = 4326 # so easy to transform projection system!!
 ```{r dams}
 
 ca_dams <- read_sf(".", "California_Jurisdictional_Dams") %>% 
-  rename(Condition = Condition_) # change column name
+  dplyr::rename(Condition = Condition_) # change column name
 
 ca_dams$Condition <- fct_relevel(ca_dams$Condition, "Fair", "Satisfactory", "Unsatisfactory", "Poor") # want an order that isn't alphabetical; important for data visualization!
 
