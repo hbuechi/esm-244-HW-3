@@ -9,6 +9,24 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+###Task 1: Open science perspectives
+
+  Open science aims to benefit both scientists and society. These benefits include transparency and reproducibility to verify findings, and access to more potential collaborators, access to data and manuscripts without paywalls. These are all excellent because they have the potential to make the process of science more accessible to scientists without traditional, university-based resources; and make it more legitimate and rigorous. But I have heard less from my peers about the benefits that open science can bring to *society*, which I think is a critical conversation to have.
+  
+  As I have come-of-age as a scientist, it has become clear that the scientific establishment has never been particularly great at communicating effectively and clearly with the general public. There are cultural barriers, resource barriers, ideological barriers, educational barriers - all kinds of hurdles that have to be overcome to solve the problem. But sometimes I have this frustrated, angry thought: “Why haven’t we figured this out yet?!” Why haven’t scientists figured out how to communicate and share their knowledge in a way that gains trust and sparks excitement?
+  
+Bahlai et al. (2019) brought up a great point that non-scientists “fund [often through taxes], participate in, benefit from, and in some cases are the subjects of [scientific] research.” But often, they are shut out of the process. Open science can help with this. While I doubt that even a decent *minority* of the public would access openly-available data or manuscripts, some would, and those people may feel more empowered as a result. 
+
+  I have personal experience with this. I worked as a research in a molecular evolutionary biology lab and our work on a rather controversial topic was profiled in *The New York Times*. After the publication, my lab manager received hundreds of emails from *NYT* readers. A few stuck in my mind; they specifically asked for more information about our study and cited themselves as taxpayers whose money funds NSF grants like ours. They were mostly confrontational and alluded to a lack of belief in evolution, but nonetheless, they got me thinking. Sharing data, methods, and manuscripts (beyond press releases and science journalism) with the public in a fairly digestible way could go a long way in building faith. Many people still would not have the tools (including internet, which I had not thought of as a barrier until reading these articles! Such an interesting dilemma...) or the desire to “look under the hood” so to speak, but I think that people would recognize that effort to share.
+  
+  That lab that was profiled in the *NYT* did not practice open science. The principal investigator, while established in his field, was incredibly competitive. The next evolutionary biology lab I worked in did, though. We pre-printed manuscripts in repositories like bioRxiv and posted free PDFs of all of our publications on our lab website. This was a formative experience for me because that PI was an early-career researcher. He existed on the continuum of open science - he wasn’t “entirely open.” We did not make all of our data publicly available. He learned the tools when he had the time. But he wanted to institute open habits early on in his career so that they became the norm.
+  
+  He was also a cis, straight, white male from a prestigious academic background in the United States - arguably some of the characteristics that make it the easiest to take advantage of open science. It can be enough of a battle for scientists who are POC, non-male, non-white, disabled, primary caretakers, etc. to establish themselves and gain career stability. The nobility of open science, when discussed without practical suggestions for implementation and risks, still creates a social strata with winners and losers. The winners are those who can afford the risks and pat themselves on the back for a job well done. The losers are everyone else. This is not fair.
+  
+  In my group project at Bren, we have had many conversations about what it means for our team to be open and transparent. We had to sign a non-disclosure agreement with our client in order to access our primary dataset. Given my previous experiences with being pretty open, this has been hard to accept. It just feels weird that we cannot share most of our data. Our collaborators have wanted access, too, but we cannot grant that. That has lead to some very awkward conversations and the unraveling of one relationship. We want to share this with our peers and whoever else might want to see it. Right now, a major hurdle for me is the thought of dealing with criticism of our methods and conclusions - this makes me very nervous. But it is an excellent opportunity to make me a better scientist, which is what open science is about for me.
+
+
+
 ```{r packages_data, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
 library(tidyverse)
@@ -56,9 +74,13 @@ lizard <- read_csv("lter_lizard_pitfall.csv")
 
 ```
 
-###Task 2: 
+
+
+###Task 2: Truckee River flow (2000 - 2016)
 
 ####Part a: Decomposed time series graphs
+
+
 ```{r time_graphs, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
 # I did some data clean up in Excel because it was quick and easy
@@ -90,6 +112,8 @@ plot(mean_dc) # original, trend, seasonality, residuals that show trends that do
 The monthly mean discharge of the Truckee River is additive (the peaks have roughly the same frequency and amplitude) and there is an overall downward trend between 2000 and 201. There are also strong seasonal (by year) and cyclical components; I'm comparing the scales of each graph to make that claim. The cyclical decomposition shows a lot of variability in ~2006/2007 and ~2012, both of which were wet periods in two decades characterized by drought. (Reference: https://www.drought.gov/drought/states/california)
 
 ####Part b: Holt-Winters or ARIMA for forecasting
+
+
 ```{r about_the_tests, warning=FALSE, message=FALSE, errors=FALSE, include = FALSE, results='hide'}
 
 #Holt-Winters: triple exponential smoothing (alpha, beta, gamma), uses smoothing factors to weight more recent time points more in prediction, based on trend and seasonality
@@ -112,6 +136,7 @@ The monthly mean discharge of the Truckee River is additive (the peaks have roug
 ```
 
 Holt-Winters exponential smoothing coefficients:
+
 ```{r holt_winters, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
 mean_hw <- HoltWinters(mean_ts)
@@ -124,6 +149,7 @@ mean_hw <- HoltWinters(mean_ts)
 ```
 
 Holt-Winters forecasting, 5 years into the future:
+
 ```{r HW_forecasting, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
 mean_forecast <- forecast(mean_hw, h = 60) # 60 months = 5 years into the future - remember, we defined this as monthly data using the tserie() package
@@ -136,6 +162,8 @@ mean_forecast <- forecast(mean_hw, h = 60) # 60 months = 5 years into the future
 ```
 
 ####Part c: Check Holt-Winters residuals:
+
+
 ```{r HW_residuals, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
 par(mfrow = c(1,2))
@@ -147,6 +175,8 @@ qqnorm(mean_forecast$residuals)
 ```
 
 ####Extra: ARIMA for comparison
+
+
 ```{r ARIMA, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
 mean_pdq <- auto.arima(mean_ts)
@@ -177,7 +207,10 @@ plot(forecast_mean)
 
 ```
 
+
 ###Task 3: Mapping California's National Parks
+
+
 ```{r wrangle_spatial_data, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
 # Remember: .shp - geometries, .dbf - attributes, .prj - projections --> if there is no projection associated, we'll have to set one
@@ -240,6 +273,8 @@ ggplot(parks_clip) +
 
 
 ###Task 4: Lizards in the Northern Chihuahan Desert - Data Wrangling and Analysis
+
+
 ```{r panel_regression_INCORRECT, eval=FALSE}
 
 weight <- lizard %>% 
@@ -289,9 +324,11 @@ weight_panel <- weight_panel %>%
 
 ```
 
+
 ####Part 1. For all lizards trapped at site ‘CALI’, do weights of male and female adult lizards differ significantly?
 
 #####Mann-Whitney U Test (distributions aren't normal)
+
 ```{r ttest, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
 # Lab 4 from ESM 206 for reference
@@ -342,9 +379,11 @@ MWU
 
 There is no significant difference in mean weight for male (n=840) and female (n=61) lizards captured at the "CALI" site between 1989 and 2006 (f(839) = 0.83, p = 0.28, alpha = 0.05).
 
+
 ####Part 2. For lizards trapped at the ‘CALI’ site, is there a significant difference in the proportion of adult male and female lizards with broken tails?
 
 #####Chi-square test
+
 ```{r contingency_table, warning=FALSE, message=FALSE, errors=FALSE, results='hide'}
 
 # Lab 6 from ESM 206 for reference
